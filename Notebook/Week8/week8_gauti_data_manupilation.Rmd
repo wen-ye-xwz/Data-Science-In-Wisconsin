@@ -1,0 +1,102 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      cache = FALSE)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(stringr)
+source("scripts/viridis.R")
+```
+
+
+
+```{r}
+
+breaks = read.csv("data/Water_Main_Breaks.csv") %>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_date,break_year)%>%
+  drop_na()%>%
+  mutate(m=ymd_hms(break_date),
+         break_month=month(m))%>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_month,break_year)%>%
+  group_by(pipe_size,pipe_depth_ft,break_month,break_year)%>%
+  summarize(n=n())%>%
+  filter(break_month==1)%>%
+  mutate(pipe_size_2=pipe_size^2,
+         pipe_depth_2=pipe_depth_ft^2,
+         linear=1)%>%
+select(pipe_depth_2,pipe_depth_ft,pipe_size_2,pipe_size,linear,break_year,n,break_month)
+
+breaks = subset(breaks, select = -c(break_month) )
+
+
+write.csv(breaks,"data/Jan_Breaks.csv")
+
+breaks
+
+
+```
+
+```{r}
+
+test = read.csv("data/Water_Main_Breaks.csv") %>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_date,break_year)%>%
+  drop_na()%>%
+  mutate(m=ymd_hms(break_date),
+         break_month=month(m))%>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_month,break_year)%>%
+  mutate(pipe_depth_ft=round_to_fraction(pipe_depth_ft,2,Inf),
+         pipe_size=round_to_fraction(pipe_size,2,Inf))%>%
+  group_by(pipe_size,pipe_depth_ft,break_month,break_year)%>%
+  summarize(n=n())%>%
+  filter(break_month==1,(break_year==2019|break_year==2018))%>%
+  mutate(pipe_size_2=pipe_size^2,
+         pipe_depth_2=pipe_depth_ft^2,
+         linear=1,
+         break_year=2020)%>%
+select(pipe_depth_2,pipe_depth_ft,pipe_size_2,pipe_size,linear,break_year,n,break_month)%>%
+ subset( select = -c(break_month,n) ) %>%
+  group_by(pipe_depth_2,pipe_depth_ft,pipe_size_2,pipe_size,linear,break_year)%>%
+  summarize(n=n()) %>%
+  subset(select = -c(n))
+
+  
+
+
+write.csv(test,"data/test.csv")
+
+test
+
+
+```
+```{r}
+question=breaks%>%
+  group_by(break_year)%>%
+  summarize(n=sum(n))
+question
+```
+```{r}
+manupilate = read.csv("data/manupilation.csv")%>%
+  mutate(depth=case_when(
+    pipe_depth<=5 ~ "3 - 5",
+    (pipe_depth>5 & pipe_depth<=8) ~ "5 - 8",
+    pipe_depth>8 ~ "8 - 11"
+  )) %>%
+    mutate(size=case_when(
+    pipe_size<=4 ~ "1 - 4",
+    (pipe_size>4 & pipe_size<=8) ~ "4 - 8",
+    pipe_size>8 ~ "8 - 12"
+  ))%>%
+  group_by(depth,size)%>%
+  summarize(count=sum(Number))%>%
+  mutate(count=round(count))
+```
+
+```{r, fig.width=4,fig.height=4}
+ggplot(manupilate,aes(fill=size,x=depth,y=count))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  labs(fill="Pipe Size (m)", x="Pipe Depth (ft)",y="Expected Number of Breaks")
+```
+
