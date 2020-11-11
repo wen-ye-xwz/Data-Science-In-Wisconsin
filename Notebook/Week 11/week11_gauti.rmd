@@ -1,0 +1,69 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, fig.show = 'hide')
+library(tidyverse)
+library(lubridate)
+## Note: this code assumes viridis.R and ggprob.R are in a directory named scripts
+##       which is two steps up the file directory tree
+## Edit as needed
+#source("../../scripts/viridis.R")
+#source("../../scripts/ggprob.R")
+```
+
+```{r, fig.width=7.5,fig.height=5}
+
+pdf("lifetime.pdf")
+
+data <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(FacilityID,InstallYea,Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None",
+         InstallYea!=0)%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         lifetime=year-InstallYea)%>%
+  filter(year!=1970,
+         lifetime>=0)%>%
+  group_by(Material,lifetime)%>%
+  summarize(n=n())
+
+
+
+ggplot(data,aes(fill=Material,x=lifetime,y=n))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  labs(fill="Material", x="Lifetime (years)",y="Number of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+
+dev.off()
+
+```
+
+```{r}
+X <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(FacilityID,InstallYea,Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None",
+         InstallYea!=0)%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         month=month(break_date),
+         lifetime=year-InstallYea)%>%
+  filter(year!=1970,
+         lifetime>=0)%>%
+  group_by(Material,lifetime,month)%>%
+  summarize(n=n())%>%
+  mutate(material=case_when(
+    Material== "CI" ~ 0,
+    Material== "COPPER" ~ 1,
+    Material== "DI" ~ 2,
+    Material== "PVC" ~ 3,
+    Material== "SAND" ~ 4,
+    Material== "SPUN" ~ 5
+  ))%>%
+  subset(select=-c(n,Material))
+write.csv(X,"PCA_X.csv")
+```
