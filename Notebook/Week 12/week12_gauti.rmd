@@ -1,0 +1,129 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, fig.show = 'hide')
+library(tidyverse)
+library(lubridate)
+## Note: this code assumes viridis.R and ggprob.R are in a directory named scripts
+##       which is two steps up the file directory tree
+## Edit as needed
+#source("../../scripts/viridis.R")
+#source("../../scripts/ggprob.R")
+```
+
+```{r, fig.width=7.5,fig.height=5}
+
+pdf("lifetime.pdf")
+
+data <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(FacilityID,InstallYea,Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None",
+         InstallYea!=0)%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         lifetime=year-InstallYea)%>%
+  filter(year!=1970,
+         lifetime>=0)%>%
+  group_by(Material,lifetime)%>%
+  summarize(n=n())
+
+
+
+ggplot(data,aes(fill=Material,x=lifetime,y=n))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  labs(fill="Material", x="Lifetime (years)",y="Number of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+
+dev.off()
+
+```
+```{r}
+pdf("lifetime.pdf")
+ggplot(data,aes(color=Material,x=lifetime,y=n))+
+  stat_ecdf(geom = "step")+
+  labs(color="Material", x="Lifetime (years)",y="Cumulative Distibutive Frequency of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+dev.off()
+```
+
+```{r}
+smooth_ecd = function(adj = 1) {
+
+  dat <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(FacilityID,InstallYea,Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None",
+         InstallYea!=0)%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         lifetime=year-InstallYea)%>%
+  filter(year!=1970,
+         lifetime>=0)%>%
+  group_by(Material,lifetime)%>%
+  summarize(n=n())
+
+  # Extend range of density estimate beyond data
+  e = 0.3 * diff(range(dat$lifetime))
+
+  # Kernel density estimate of fake data
+  dens = density(dat$lifetime, adjust=adj, from=min(dat$lifetime)-e, to=max(dat$lifetime) +e)
+  dens = data.frame(x=dens$x, y=dens$y)
+
+  # Plot kernel density (blue), ecdf (red) and smoothed ecdf (black)
+ ggplot(dat,aes(x=lifetime,y=n))+
+    geom_line(data=dens, aes(x=x, y=cumsum(y)/sum(y)), size=0.7) +
+    stat_ecdf(size=0.6, alpha=0.6) +
+    theme_classic() +
+    labs(title=paste0("adj=",adj))
+}
+
+smooth_ecd(adj=1)
+smooth_ecd(adj=0.3)
+smooth_ecd(adj=0.1)
+```
+
+
+```{r}
+y <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None")%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         month=month(break_date))%>%
+  filter(year!=1970)%>%
+  group_by(Material)%>%
+  summarize(n=n())
+write.csv(y,"PCA_Material.csv")
+```
+
+```{r}
+X <- read_csv("all_water_mains_with_breaksinfo.csv")%>%
+  subset(select=c(FacilityID,InstallYea,Material,break_date))%>%
+  filter(break_date!="None",
+         Material!="None",
+         InstallYea!=0)%>%
+  mutate(break_date=ymd(break_date),
+         year=year(break_date),
+         month=month(break_date),
+         lifetime=year-InstallYea)%>%
+  filter(year!=1970,
+         lifetime>=0)%>%
+  group_by(Material,lifetime,month)%>%
+  summarize(n=n())%>%
+  mutate(material=case_when(
+    Material== "CI" ~ -0.45334713,
+    Material== "COPPER" ~ -0.00941066,
+    Material== "DI" ~ 0.85875466,
+    Material== "PVC" ~ -0.01230057,
+    Material== "SAND" ~ -0.1866736,
+    Material== "SPUN" ~ -0.1480875
+  ))%>%
+  subset(select=-c(n,Material))
+write.csv(X,"PCA_Xv2.csv")
+```
