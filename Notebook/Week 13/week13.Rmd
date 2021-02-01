@@ -1,0 +1,131 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      cache = FALSE)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(stringr)
+#source("scripts/viridis.R")
+```
+
+
+```{r}
+manupilate = read.csv("piperegressiontest.csv")%>%
+            subset(select=-c(X))
+
+manupilate=unique(manupilate)%>%
+  mutate(depth=case_when(
+    pipe_depth<=5 ~ "3 - 5",
+    (pipe_depth>5 & pipe_depth<=8) ~ "5 - 8",
+    pipe_depth>8 ~ "8 - 11"
+  )) %>%
+    mutate(size=case_when(
+    pipe_size<=4 ~ "1 - 4",
+    (pipe_size>4 & pipe_size<=8) ~ "4 - 8",
+    pipe_size>8 ~ "8 - 12"
+  ))%>%
+      mutate(season=case_when(
+    Month<=2 ~ "Winter",
+    (Month>2 & Month<=5) ~ "Spring",
+    (Month>5 & Month<=8) ~ "Summer",
+    (Month>8 & Month<=11) ~ "Fall",
+    Month==12 ~ "Winter"
+  ))%>%
+  group_by(season,depth,size)%>%
+  summarize(count=sum(Number))%>%
+  mutate(count=round(count))
+
+
+```
+
+```{r}
+#pdf("pipetest.pdf")
+ggplot(manupilate,aes(fill=size,x=depth,y=count))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  ylim(0,115)+
+  facet_wrap(~season)+
+  labs(fill="Pipe Size (m)", x="Pipe Depth (ft)",y="Expected Number of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+#dev.off()
+
+```
+
+
+```{r, fig.width=4,fig.height=4}
+#pdf("pipetype.pdf")
+ggplot(manupilate,aes(fill=size,x=depth,y=count))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  labs(fill="Pipe Size (m)", x="Pipe Depth (ft)",y="Expected Number of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+#dev.off()
+```
+```{r}
+test = read.csv("Water_Main_Breaks.csv") %>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_date,break_year)%>%
+  drop_na()%>%
+  mutate(m=ymd_hms(break_date),
+         break_month=month(m))%>%
+  select(OBJECTID,pipe_size,pipe_depth_ft,break_month,break_year)%>%
+  mutate(pipe_depth_ft=round_to_fraction(pipe_depth_ft,2,Inf),
+         pipe_size=round_to_fraction(pipe_size,2,Inf))%>%
+  group_by(break_month,pipe_size,pipe_depth_ft,break_year)%>%
+  summarize(n=n())%>%
+  filter(break_year==2018)%>%
+  mutate(depth=case_when(
+    pipe_depth_ft<=5 ~ "3 - 5",
+    (pipe_depth_ft>5 & pipe_depth_ft<=8) ~ "5 - 8",
+    pipe_depth_ft>8 ~ "8 - 11"
+  )) %>%
+    mutate(size=case_when(
+    pipe_size<=4 ~ "1 - 4",
+    (pipe_size>4 & pipe_size<=8) ~ "4 - 8",
+    pipe_size>8 ~ "8 - 12"
+  ))%>%
+      mutate(season=case_when(
+    break_month<=2 ~ "Winter",
+    (break_month>2 & break_month<=5) ~ "Spring",
+    (break_month>5 & break_month<=8) ~ "Summer",
+    (break_month>8 & break_month<=11) ~ "Fall",
+    break_month==12 ~ "Winter"
+  ))%>%
+  group_by(season,depth,size)%>%
+  summarize(count=sum(n))%>%
+  mutate(count=round(count))
+```
+
+```{r}
+#pdf("pipetestcomparison.pdf")
+ggplot(test,aes(fill=size,x=depth,y=count))+
+  geom_bar(position="stack",width=0.7,stat="identity")+
+  facet_wrap(~season)+
+  labs(fill="Pipe Size (m)", x="Pipe Depth (ft)",y="Expected Number of Breaks")+
+  theme(text = element_text(size=20),
+    axis.text = element_text(size=15))
+#dev.off()
+```
+```{r}
+accuracy=test%>%
+  mutate(countreal=count)%>%
+  select(c=-(count))%>%
+  left_join(manupilate)%>%
+  mutate(diff=countreal-count)
+```
+
+```{r, fig.width=5.5,fig.height=4}
+pdf("pipetestregression.pdf")
+ggplot(accuracy,aes(fill=size,x=depth,y=diff))+
+  geom_bar(position="stack",width=0.6,stat="identity")+
+  facet_wrap(~season)+
+  ylim(-20,120)+
+  labs(fill="Pipe Size (inches)", x="Pipe Depth (ft)",y="Incorrect Numbers")+
+  theme_minimal()+
+  theme(text = element_text(size=16),
+    axis.text = element_text(size=11))
+dev.off()
+```
+
